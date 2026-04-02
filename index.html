@@ -437,13 +437,13 @@ function extractShirtColor(canvas, segmentation) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // THE MICRO-SNIPER BOX
-            // Y: 55% to 80% (True mid-chest, safely below the chin)
-            // X: 45% to 55% (A razor-thin 10% vertical column dead center for your open shirt)
-            const startY = canvas.height * 0.55; 
-            const endY = canvas.height * 0.80; 
-            const startX = canvas.width * 0.45;
-            const endX = canvas.width * 0.55;
+            // THE JACKET BOX: Wide and low.
+            // Y: 65% to 90% (Safely below your chin, right in the middle of the fleece)
+            // X: 30% to 70% (A wide horizontal band to get a great average of the jacket)
+            const startY = canvas.height * 0.65; 
+            const endY = canvas.height * 0.90; 
+            const startX = canvas.width * 0.30;
+            const endX = canvas.width * 0.70;
             
             for (let i = 0; i < segmentation.data.length; i++) {
                 if (segmentation.data[i] === 1) { 
@@ -462,25 +462,13 @@ function extractShirtColor(canvas, segmentation) {
             
             if (count === 0) return chroma('#808080'); 
             
+            // 1. Get the EXACT, raw average color from the camera
             let finalColor = chroma([r / count, g / count, b / count]);
-            let [h, s, l] = finalColor.hsl();
             
-            if (isNaN(h)) h = 0; 
-
-            // THE FIX: If the camera sees ANY low-saturation muddy color (like your reddish-brown),
-            // we ruthlessly override it and force it to be a clean, cool blue-grey.
-            if (s < 0.25) {
-                finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.15);
-            } 
-            else {
-                // It's an intentionally colorful shirt (like Forest Green)
-                finalColor = finalColor.saturate(0.4); 
-                if (finalColor.luminance() < 0.05) {
-                    finalColor = finalColor.brighten(0.4);
-                }
-            }
-            
-            return finalColor;
+            // 2. NO hue shifting. NO crazy math. 
+            // We just add a microscopic 10% saturation bump so it doesn't look dead on a monitor, 
+            // and leave your beige completely alone!
+            return finalColor.saturate(0.1);
         }
         function drawFinalBackground(bgColor) {
             ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
