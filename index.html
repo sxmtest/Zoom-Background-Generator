@@ -39,7 +39,7 @@
             animation: smoothReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        /* FIXED: Dedicated animation for the webcam to preserve the mirror flip */
+        /* Dedicated animation for the webcam to preserve the mirror flip */
         @keyframes webcamReveal {
             0% { opacity: 0; transform: scaleX(-1) translateY(8px); }
             100% { opacity: 1; transform: scaleX(-1) translateY(0); }
@@ -62,7 +62,7 @@
             right: 40px;
             color: #C1C8CF;
             font-family: "Roboto Mono", monospace;
-            font-size: 12px;
+            font-size: 10px; /* Reduced to 10px */
             font-weight: 400;
             line-height: 140%;
             transition: color 0.3s ease;
@@ -80,12 +80,12 @@
             gap: 6px;
             color: #F8FAFC;
             font-family: "Roboto Mono", monospace;
-            font-size: 10px;
+            font-size: 10px; /* Reduced to 10px */
             font-weight: 400;
             line-height: 100%;
         }
         .bottom-text .dim {
-            color: #6E7378;
+            opacity: 0.4;
         }
 
         /* Center Content Wrapper */
@@ -96,13 +96,13 @@
             gap: 32px;
         }
 
-        /* Step Indicator Container */
+        /* Step Indicator Container - Tighter padding to hug the boxes */
         .number-box {
             display: inline-flex;
-            padding: 12px 16px;
+            padding: 8px 10px; 
             justify-content: center;
             align-items: center;
-            gap: 12px;
+            gap: 8px; 
             border-radius: 16px;
             background: #1E2124;
         }
@@ -120,19 +120,20 @@
             background: transparent;
             color: #C1C8CF;
             font-weight: 500;
+            font-size: 14px;
             cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: background-color 0.5s ease, color 0.5s ease;
         }
         .step:hover {
             color: #F8FAFC;
-            background: rgba(60, 65, 70, 0.5);
-            transform: translateY(-2px);
+            background-color: rgba(60, 65, 70, 0.5);
         }
         .step:active {
-            transform: scale(0.92);
+            transform: scale(0.96);
+            transition: transform 0.1s ease;
         }
         .step.active {
-            background: #3C4146;
+            background-color: #3C4146;
             color: #F8FAFC;
             transform: none; 
         }
@@ -157,7 +158,7 @@
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            transform: scaleX(-1); /* Flips the camera */
+            transform: scaleX(-1);
             display: none; 
         }
 
@@ -168,52 +169,65 @@
             display: none; 
         }
 
-        /* CTA Buttons */
+        /* CTA Containers */
         .cta-container {
             display: inline-flex;
             align-items: center;
             gap: 16px;
-            max-height: 44px;
-            min-width: 120px;
+            min-height: 60px;
         }
 
+        /* BASE BUTTON */
         button {
             cursor: pointer;
-            font-size: 14px;
+            font-size: 14px; 
             font-weight: 500;
             font-family: "Geist", inherit;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            will-change: transform;
+            line-height: 1; /* Forces the text to center optically */
+            transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease, transform 0.1s ease;
+            will-change: background-color, color;
         }
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none !important;
-            box-shadow: none !important;
         }
 
-        /* Primary Button (White Fill) */
+        /* Primary Button */
         .btn-primary {
             display: flex;
-            padding: 20px 24px;
+            padding: 14px 28px; 
             justify-content: center;
             align-items: center;
             border-radius: 999px;
-            background: #F8FAFC;
+            background-color: #F8FAFC;
             color: #0F0F10;
             border: none;
-            min-width: 180px;
         }
-        
-        /* FIXED: Hover is now #E2E8F0 for a much more noticeable color shift */
         .btn-primary:hover:not(:disabled) {
-            background: #E2E8F0;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(248, 250, 252, 0.15);
+            background-color: #C1C8CF;
         }
         .btn-primary:active:not(:disabled) {
-            transform: scale(0.96);
-            box-shadow: 0 2px 8px rgba(248, 250, 252, 0.1);
+            transform: scale(0.98);
+        }
+
+        /* Secondary Button */
+        .btn-secondary {
+            display: flex;
+            padding: 14px 28px; 
+            justify-content: center;
+            align-items: center;
+            border-radius: 999px;
+            border: 1px solid #F8FAFC;
+            background-color: transparent;
+            color: #F8FAFC;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #F8FAFC;
+            color: #0F0F10;
+        }
+        .btn-secondary:active:not(:disabled) {
+            transform: scale(0.98);
         }
     </style>
 </head>
@@ -275,14 +289,12 @@
 
         let net;
 
-        // FIXED: Helper function now accepts an optional class name
         function playRevealAnimation(element, animClass = 'animate-reveal') {
             element.classList.remove(animClass);
-            void element.offsetWidth; // Trigger DOM reflow to restart animation
+            void element.offsetWidth; 
             element.classList.add(animClass);
         }
 
-        // 1. Load AI Model
         async function loadModel() {
             net = await bodyPix.load({ architecture: 'MobileNetV1', outputStride: 16, multiplier: 0.75, quantBytes: 2 });
             statusText.innerText = "System Ready";
@@ -290,7 +302,6 @@
             startCamBtn.disabled = false;
         }
 
-        // Logic to shift UI to Step 1 (Reset)
         function goToStep1() {
             if (webcam.srcObject) {
                 webcam.srcObject.getTracks().forEach(track => track.stop());
@@ -317,7 +328,6 @@
             statusText.style.color = "#C1C8CF";
         }
 
-        // Logic to shift UI to Step 2 (Live Camera)
         function goToStep2() {
             if (!webcam.srcObject) {
                 startCamBtn.click();
@@ -325,7 +335,6 @@
             }
             
             webcam.style.display = 'block';
-            // FIXED: Uses the dedicated webcam animation to preserve the scaleX(-1) mirror effect
             playRevealAnimation(webcam, 'animate-reveal-webcam');
 
             outputCanvas.style.display = 'none';
@@ -348,7 +357,6 @@
             statusText.style.color = "#C1C8CF";
         }
 
-        // 2. Start Camera Button Listener
         startCamBtn.addEventListener('click', async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
@@ -360,13 +368,12 @@
             } catch (err) {
                 console.error("Camera access denied.", err);
                 statusText.innerText = "Camera Blocked";
-                statusText.style.color = "#FF5643"; 
+                statusText.style.color = "#EF4444"; 
                 camPrompt.innerText = "Please allow camera access.";
                 playRevealAnimation(camPrompt);
             }
         });
 
-        // 3. Snap Photo & Auto-Generate
         captureBtn.addEventListener('click', async () => {
             statusText.innerText = "Analyzing...";
             captureBtn.disabled = true;
@@ -398,10 +405,9 @@
             step3.classList.add('active');
 
             statusText.innerText = `Color Matched: ${exactOutfitColor}`;
-            statusText.style.color = "#F0F55F"; 
+            statusText.style.color = "#10B981"; 
         });
 
-        // Event Listeners for Step Indicators (Back Buttons)
         step1.addEventListener('click', () => {
             if (!step1.classList.contains('active')) goToStep1();
         });
