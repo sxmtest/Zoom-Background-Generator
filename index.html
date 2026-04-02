@@ -161,25 +161,6 @@
             display: none; 
         }
 
-    /* The SVG Target Guide Container */
-        .target-guide {
-            position: absolute;
-            bottom: -4px; /* Pushes the bottom dashed line completely out of bounds! */
-            left: 0;
-            right: 0;
-            margin: 0 auto;
-            width: 500px; /* Scaled up from 420px to make the silhouette taller */
-            display: none; 
-            pointer-events: none;
-            z-index: 10;
-        }
-        
-        .target-guide svg {
-            width: 100%;
-            height: 120%
-            height: auto;
-            display: block;
-        }
 
         #outputCanvas { 
             width: 100%; 
@@ -456,8 +437,10 @@ function extractShirtColor(canvas, segmentation) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // STRICT SNIPER BOX - Dead center of the lower chest, completely avoiding the neck
-            const startY = canvas.height * 0.75; 
+            // STRICT TIGHT SNIPER BOX
+            // Y: 70% to 95% (Safely below the chin)
+            // X: 40% to 60% (Narrow column directly in the center to hit your inner shirt)
+            const startY = canvas.height * 0.70; 
             const endY = canvas.height * 0.95; 
             const startX = canvas.width * 0.40;
             const endX = canvas.width * 0.60;
@@ -480,12 +463,30 @@ function extractShirtColor(canvas, segmentation) {
             // Fallback if the AI somehow totally misses the person
             if (count === 0) return chroma('#808080'); 
             
-            // 1. Get the pure, raw average color from the camera
             let finalColor = chroma([r / count, g / count, b / count]);
+            let [h, s, l] = finalColor.hsl();
             
-            // 2. Add a tiny, generic saturation bump so it looks nice as a background, 
-            // but NEVER force or change the actual hue. Just let it be what it is!
-            return finalColor.saturate(0.2);
+            if (isNaN(h)) h = 0; 
+
+            // RESTORED SMART MATH: Fixes muddy browns and neutralizes webcam noise
+            if (s < 0.20) {
+                // If it's picking up warm room light (brown/yellow/orange), force it cool
+                if (h > 10 && h < 60) {
+                    finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.15);
+                } else {
+                    // Otherwise, explicitly strip out webcam color noise
+                    finalColor = finalColor.set('hsl.s', 0.15);
+                }
+            } 
+            else {
+                // It's an intentionally colorful shirt
+                finalColor = finalColor.saturate(0.5); 
+                if (finalColor.luminance() < 0.04) {
+                    finalColor = finalColor.brighten(0.4);
+                }
+            }
+            
+            return finalColor;
         }
         function drawFinalBackground(bgColor) {
             ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
