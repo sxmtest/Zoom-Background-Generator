@@ -451,16 +451,17 @@
             if (step3.classList.contains('active')) goToStep2();
         });
 
-        function extractShirtColor(canvas, segmentation) {
+    function extractShirtColor(canvas, segmentation) {
             const ctx = canvas.getContext('2d');
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // STRICT SNIPER BOX - Mathematically scaled up to cover the wider 420px chest area
-            const startY = canvas.height * 0.55; 
-            const endY = canvas.height * 1.0; 
-            const startX = canvas.width * 0.25;
-            const endX = canvas.width * 0.75;
+            // STRICT SNIPER BOX - Pushed way down to the bottom 25% of the frame
+            // This guarantees we completely miss the neck/chin and only hit the torso.
+            const startY = canvas.height * 0.75; 
+            const endY = canvas.height * 0.95; 
+            const startX = canvas.width * 0.35;
+            const endX = canvas.width * 0.65;
             
             for (let i = 0; i < segmentation.data.length; i++) {
                 if (segmentation.data[i] === 1) {
@@ -476,6 +477,7 @@
                     }
                 }
             }
+            
             if (count === 0) return chroma('#808080'); 
             
             let finalColor = chroma([r / count, g / count, b / count]);
@@ -483,9 +485,11 @@
             
             if (isNaN(h)) h = 0; 
 
+            // 1. Erase muddy room lighting on white/grey/black shirts
             if (s < 0.18 && h > 10 && h < 60) {
                 finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.15);
             } 
+            // 2. Preserve and boost actual rich colors (Forest Green, Navy, etc.)
             else {
                 finalColor = finalColor.saturate(0.8);
                 if (finalColor.luminance() < 0.04) {
