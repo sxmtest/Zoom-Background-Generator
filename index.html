@@ -437,9 +437,7 @@ function extractShirtColor(canvas, segmentation) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // THE JACKET BOX: Wide and low.
-            // Y: 65% to 90% (Safely below your chin, right in the middle of the fleece)
-            // X: 30% to 70% (A wide horizontal band to get a great average of the jacket)
+            // TARGET AREA: Wide and low to perfectly capture the bulk of the jacket/chest
             const startY = canvas.height * 0.65; 
             const endY = canvas.height * 0.90; 
             const startX = canvas.width * 0.30;
@@ -462,13 +460,34 @@ function extractShirtColor(canvas, segmentation) {
             
             if (count === 0) return chroma('#808080'); 
             
-            // 1. Get the EXACT, raw average color from the camera
             let finalColor = chroma([r / count, g / count, b / count]);
+            let [h, s, l] = finalColor.hsl();
             
-            // 2. NO hue shifting. NO crazy math. 
-            // We just add a microscopic 10% saturation bump so it doesn't look dead on a monitor, 
-            // and leave your beige completely alone!
-            return finalColor.saturate(0.1);
+            if (isNaN(h)) h = 0; 
+            
+            // --- WEBCAM COLOR CORRECTION ---
+            
+            // 1. The "Muddy Sensor" Fix
+            // If the color is low saturation (beige, grey, white), webcams add ugly yellow/green noise.
+            // We act like a camera filter and mix in a tiny 15% splash of clean slate-blue.
+            // This neutralizes the "dirty" look without destroying the base beige/grey hue!
+            if (s < 0.20) {
+                finalColor = chroma.mix(finalColor, '#8AA2B8', 0.15, 'rgb');
+            }
+            
+            // 2. The "Washed Out" Fix
+            // Webcams desaturate everything. We bump the saturation to match real-life vibrancy.
+            finalColor = finalColor.saturate(0.5);
+            
+            // 3. The "Crushed Shadows" Fix
+            // If the webcam made the jacket too dark, we gently lift the lighting so it feels premium.
+            if (finalColor.luminance() < 0.10) {
+                finalColor = finalColor.brighten(0.4);
+            } else if (finalColor.luminance() < 0.25) {
+                finalColor = finalColor.brighten(0.2);
+            }
+            
+            return finalColor;
         }
         function drawFinalBackground(bgColor) {
             ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
