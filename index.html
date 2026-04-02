@@ -437,11 +437,13 @@ function extractShirtColor(canvas, segmentation) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // THE SIMPLE BOX: Just the center chest. Avoids the neck and deep lap shadows.
-            const startY = canvas.height * 0.65; 
-            const endY = canvas.height * 0.85; 
-            const startX = canvas.width * 0.40;
-            const endX = canvas.width * 0.60;
+            // EXACT USER MATH:
+            // Y: 70% to 100% (The absolute bottom 30% of the camera feed)
+            // X: 20% to 80% (Exactly 60% of the width, perfectly centered)
+            const startY = canvas.height * 0.70; 
+            const endY = canvas.height * 1.0; 
+            const startX = canvas.width * 0.20;
+            const endX = canvas.width * 0.80;
             
             for (let i = 0; i < segmentation.data.length; i++) {
                 if (segmentation.data[i] === 1) { 
@@ -458,22 +460,22 @@ function extractShirtColor(canvas, segmentation) {
                 }
             }
             
+            // Fallback if the AI somehow totally misses the person
             if (count === 0) return chroma('#808080'); 
             
-            // 1. Get the EXACT, raw color hue the camera actually sees
+            // 1. Get the pure, raw average color from this strict box
             let finalColor = chroma([r / count, g / count, b / count]);
             
-            // 2. THE WEBCAM FIX (No overriding the hue!)
-            // Webcams naturally wash out colors, so we restore natural vibrance
+            // 2. Simple photographic fixes only (No hue overrides)
+            // Boost saturation to counter the webcam lens
             finalColor = finalColor.saturate(0.6);
             
-            // Webcams naturally underexpose (making beige look brown, or grey look black). 
-            // We gently lift the brightness to fix the lighting.
+            // Lift the brightness to counter muddy shadows
             let lum = finalColor.luminance();
             if (lum < 0.05) {
-                finalColor = finalColor.brighten(0.8); // Fix deeply crushed shadows
+                finalColor = finalColor.brighten(0.8);
             } else if (lum < 0.20) {
-                finalColor = finalColor.brighten(0.4); // Fix muddy mid-tones
+                finalColor = finalColor.brighten(0.4);
             }
             
             return finalColor;
