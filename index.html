@@ -437,11 +437,11 @@ function extractShirtColor(canvas, segmentation) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // TARGET AREA: Wide and low to perfectly capture the bulk of the jacket/chest
+            // THE SIMPLE BOX: Just the center chest. Avoids the neck and deep lap shadows.
             const startY = canvas.height * 0.65; 
-            const endY = canvas.height * 0.90; 
-            const startX = canvas.width * 0.30;
-            const endX = canvas.width * 0.70;
+            const endY = canvas.height * 0.85; 
+            const startX = canvas.width * 0.40;
+            const endX = canvas.width * 0.60;
             
             for (let i = 0; i < segmentation.data.length; i++) {
                 if (segmentation.data[i] === 1) { 
@@ -460,31 +460,20 @@ function extractShirtColor(canvas, segmentation) {
             
             if (count === 0) return chroma('#808080'); 
             
+            // 1. Get the EXACT, raw color hue the camera actually sees
             let finalColor = chroma([r / count, g / count, b / count]);
-            let [h, s, l] = finalColor.hsl();
             
-            if (isNaN(h)) h = 0; 
+            // 2. THE WEBCAM FIX (No overriding the hue!)
+            // Webcams naturally wash out colors, so we restore natural vibrance
+            finalColor = finalColor.saturate(0.6);
             
-            // --- WEBCAM COLOR CORRECTION ---
-            
-            // 1. The "Muddy Sensor" Fix
-            // If the color is low saturation (beige, grey, white), webcams add ugly yellow/green noise.
-            // We act like a camera filter and mix in a tiny 15% splash of clean slate-blue.
-            // This neutralizes the "dirty" look without destroying the base beige/grey hue!
-            if (s < 0.20) {
-                finalColor = chroma.mix(finalColor, '#8AA2B8', 0.15, 'rgb');
-            }
-            
-            // 2. The "Washed Out" Fix
-            // Webcams desaturate everything. We bump the saturation to match real-life vibrancy.
-            finalColor = finalColor.saturate(0.5);
-            
-            // 3. The "Crushed Shadows" Fix
-            // If the webcam made the jacket too dark, we gently lift the lighting so it feels premium.
-            if (finalColor.luminance() < 0.10) {
-                finalColor = finalColor.brighten(0.4);
-            } else if (finalColor.luminance() < 0.25) {
-                finalColor = finalColor.brighten(0.2);
+            // Webcams naturally underexpose (making beige look brown, or grey look black). 
+            // We gently lift the brightness to fix the lighting.
+            let lum = finalColor.luminance();
+            if (lum < 0.05) {
+                finalColor = finalColor.brighten(0.8); // Fix deeply crushed shadows
+            } else if (lum < 0.20) {
+                finalColor = finalColor.brighten(0.4); // Fix muddy mid-tones
             }
             
             return finalColor;
