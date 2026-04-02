@@ -437,13 +437,13 @@ function extractShirtColor(canvas, segmentation) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // THE "V-NECK" SNIPER BOX:
-            // Y: 50% to 65% (Just below the chin, hitting the widest part of the blue shirt)
-            // X: 45% to 55% (A razor-thin 10% column to avoid the plaid side panels entirely)
-            const startY = canvas.height * 0.50; 
-            const endY = canvas.height * 0.65; 
-            const startX = canvas.width * 0.45;
-            const endX = canvas.width * 0.55;
+            // THE "OVERALL OUTFIT" BOX
+            // Y: 60% to 100% (Captures the entire lower torso and chest)
+            // X: 20% to 80% (Wide enough to catch the outer shirt shoulders and inner shirt)
+            const startY = canvas.height * 0.60; 
+            const endY = canvas.height * 1.0; 
+            const startX = canvas.width * 0.20;
+            const endX = canvas.width * 0.80;
             
             for (let i = 0; i < segmentation.data.length; i++) {
                 if (segmentation.data[i] === 1) { 
@@ -462,17 +462,27 @@ function extractShirtColor(canvas, segmentation) {
             
             if (count === 0) return chroma('#808080'); 
             
-            // 1. Get the pure, raw average color from the upper-chest box
+            // 1. Get the pure, raw average color of the ENTIRE outfit
             let finalColor = chroma([r / count, g / count, b / count]);
+            let [h, s, l] = finalColor.hsl();
             
-            // 2. Simple photographic fixes (No hue overrides)
-            finalColor = finalColor.saturate(0.6);
+            if (isNaN(h)) h = 0; 
+
+            // 2. TRUE AUTO-WHITE BALANCE
+            if (s < 0.25) {
+                // If it's a neutral/dark outfit (like black plaid), the webcam will tint it warm brown.
+                // We strip out that yellow webcam noise so it reads as a clean, cool neutral.
+                finalColor = finalColor.desaturate(0.5);
+            } else {
+                // If it's a genuinely colorful outfit, bump it up so it pops on screen!
+                finalColor = finalColor.saturate(0.4);
+            }
             
-            let lum = finalColor.luminance();
-            if (lum < 0.05) {
-                finalColor = finalColor.brighten(0.8);
-            } else if (lum < 0.20) {
-                finalColor = finalColor.brighten(0.4);
+            // 3. Fix crushed webcam shadows
+            if (finalColor.luminance() < 0.08) {
+                finalColor = finalColor.brighten(0.6);
+            } else if (finalColor.luminance() < 0.20) {
+                finalColor = finalColor.brighten(0.3);
             }
             
             return finalColor;
