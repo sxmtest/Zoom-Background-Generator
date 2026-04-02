@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SiriusXM Reactive Background Generator</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
+
+    <style>
+        /* Base Reset & Layout */
+        body { 
+            margin: 0; 
+            padding: 0;
+            background: #0F0F10; 
+            color: #F8FAFC;
+            font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            min-height: 100vh;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Smooth UI Reveal Animation */
+        @keyframes smoothReveal {
+            0% { opacity: 0; transform: translateY(8px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-reveal {
+            animation: smoothReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* FIXED: Dedicated animation for the webcam to preserve the mirror flip */
+        @keyframes webcamReveal {
+            0% { opacity: 0; transform: scaleX(-1) translateY(8px); }
+            100% { opacity: 1; transform: scaleX(-1) translateY(0); }
+        }
+        .animate-reveal-webcam {
+            animation: webcamReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Top Left Logo */
+        .brand-logo {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+        }
+
+        /* Top Right System Status */
+        #status {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            color: #C1C8CF;
+            font-family: "Roboto Mono", monospace;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 140%;
+            transition: color 0.3s ease;
+        }
+
+        /* Bottom Left Metadata */
+        .bottom-text {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            display: flex;
+            width: 181px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            color: #F8FAFC;
+            font-family: "Roboto Mono", monospace;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 100%;
+        }
+        .bottom-text .dim {
+            color: #6E7378;
+        }
+
+        /* Center Content Wrapper */
+        .main-stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 32px;
+        }
+
+        /* Step Indicator Container */
+        .number-box {
+            display: inline-flex;
+            padding: 12px 16px;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            border-radius: 16px;
+            background: #1E2124;
+        }
+
+        /* Individual Clickable Number Boxes */
+        .step {
+            display: flex;
+            width: 40px;
+            height: 40px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            border-radius: 8px;
+            background: transparent;
+            color: #C1C8CF;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .step:hover {
+            color: #F8FAFC;
+            background: rgba(60, 65, 70, 0.5);
+            transform: translateY(-2px);
+        }
+        .step:active {
+            transform: scale(0.92);
+        }
+        .step.active {
+            background: #3C4146;
+            color: #F8FAFC;
+            transform: none; 
+        }
+
+        /* Camera / Preview Box */
+        .camera-box {
+            display: flex;
+            width: 710px;
+            height: 400px;
+            justify-content: center;
+            align-items: center;
+            border-radius: 12px;
+            background: #1E2124;
+            overflow: hidden;
+            position: relative;
+            transition: background-color 0.4s ease;
+        }
+        
+        #camPrompt { color: rgba(248, 250, 252, 0.5); font-weight: 500; }
+        
+        #webcam { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            transform: scaleX(-1); /* Flips the camera */
+            display: none; 
+        }
+
+        #outputCanvas { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+            display: none; 
+        }
+
+        /* CTA Buttons */
+        .cta-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 16px;
+            min-height: 60px;
+            min-width: 180px;
+        }
+
+        button {
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            font-family: "Geist", inherit;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            will-change: transform;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Primary Button (White Fill) */
+        .btn-primary {
+            display: flex;
+            padding: 20px 24px;
+            justify-content: center;
+            align-items: center;
+            border-radius: 999px;
+            background: #F8FAFC;
+            color: #0F0F10;
+            border: none;
+            min-width: 180px;
+        }
+        
+        /* FIXED: Hover is now #E2E8F0 for a much more noticeable color shift */
+        .btn-primary:hover:not(:disabled) {
+            background: #E2E8F0;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(248, 250, 252, 0.15);
+        }
+        .btn-primary:active:not(:disabled) {
+            transform: scale(0.96);
+            box-shadow: 0 2px 8px rgba(248, 250, 252, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <img id="logoImg" src="logo.png" style="display:none;" alt="Hidden Canvas Logo">
+
+    <div class="brand-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" width="172" height="28" viewBox="0 0 172 28" fill="none">
+            <path d="M27.9449 5.83099H36.0847V27.2388H27.9449V5.83099ZM27.9449 0H36.0847V4.0872H27.9449V0ZM54.8005 0H62.9404V4.0872H54.8005V0ZM54.8005 5.83099H62.9404V27.2388H54.8005V5.83099ZM79.1013 5.83099H87.2411V27.2388H79.6888V24.089C77.6555 27.0321 75.6618 27.8454 72.2949 27.8454C67.8322 27.8454 64.9407 24.985 64.9407 18.8577V5.83099H73.0805V17.3896C73.0805 20.3326 74.0576 21.27 76.0183 21.27C78.3685 21.27 79.1078 19.4297 79.1078 16.1214V5.82409L79.1013 5.83099ZM109.429 20.374C109.429 24.8265 105.904 27.8523 98.3913 27.8523C93.6976 27.8523 88.5284 26.3428 88.0993 20.5808H95.8497C95.8497 21.4354 96.16 22.0971 96.7079 22.5451C97.2162 22.9517 97.9226 23.1999 98.7016 23.1999C99.9559 23.1999 101.283 22.7932 101.283 21.2769C101.283 17.8445 88.7199 20.5808 88.7199 12.2892C88.7199 6.8166 94.1597 5.21756 98.4244 5.21756C102.689 5.21756 108.129 6.27899 108.598 11.9583H101.204C101.124 11.2622 100.854 10.7728 100.418 10.4076C99.989 10.0423 99.4014 9.87683 98.7742 9.87683C97.3615 9.87683 96.4637 10.3248 96.4637 11.3863C96.4637 14.3707 109.416 12.365 109.416 20.374M25.5551 14.9841C26.1756 15.9697 26.5453 17.1759 26.5453 18.6578C26.5057 24.1372 22.1618 27.8592 12.8072 27.8592C6.96476 27.8592 0.534736 25.9982 0 18.9128V18.5544H8.76042L6.81953 24.5232L13.2099 19.8846L19.6004 24.5232L17.9367 19.3953C17.6727 18.8645 17.0125 18.5682 17.0125 18.5682C13.5202 16.5487 0.778997 17.6515 0.778997 8.69823C0.778997 1.96434 7.54571 0 12.8535 0C18.1612 0 24.9345 1.30956 25.5155 8.29847V8.56727H15.6526L13.2099 1.04765L10.7673 8.56727H2.85852L7.27504 11.7447C8.56897 11.2002 9.95532 10.9589 11.3351 10.8142C12.8138 10.6557 14.3124 10.6212 15.7978 10.7246C17.0521 10.8142 18.2998 11.0003 19.5212 11.2967C20.6236 11.5655 21.7525 11.8687 22.7494 12.4339C23.8981 13.0818 24.8817 13.902 25.5617 14.991L25.5551 14.9841ZM52.008 5.21756C52.5163 5.21756 53.0642 5.34162 53.0642 5.34162V13.84C53.0642 13.84 52.6351 13.5987 51.3808 13.5987C48.0536 13.5987 46.3702 15.2322 46.3702 19.8502V27.2457H38.2303V5.83099H45.6308V10.1594H45.71C46.8455 6.80971 48.826 5.21756 52.008 5.21756ZM172 0.613425V27.2457H163.332V19.6916C163.332 16.0249 163.398 12.6338 163.53 9.51843C163.266 10.7935 162.976 11.9997 162.665 13.1438L159.12 27.2457H151.872L148.247 13.1438C148.115 12.62 147.99 12.1238 147.871 11.6482C147.752 11.1726 147.653 10.7522 147.574 10.38C147.495 10.0078 147.442 9.79413 147.415 9.74588C147.547 12.7854 147.613 16.1007 147.613 19.6916V27.2457H138.945V0.613425H152.657L154.862 10.7108C155.1 11.8343 155.324 12.8957 155.529 13.8882C155.819 12.2961 156.031 11.2346 156.156 10.7108L158.282 0.613425H172ZM128.066 13.0267L138.114 27.2388H127.67L126.132 24.8058L123.134 19.9811C122.322 21.2493 121.227 22.8622 119.867 24.8058L118.17 27.2388H108.281L118.606 13.585L109.39 0.613425H119.715L121.253 2.92928C122.25 4.4525 123.002 5.59664 123.498 6.36859C123.55 6.2721 123.907 5.72071 124.56 4.72131C125.088 3.92179 125.478 3.32215 125.742 2.92928L127.28 0.613425H136.892L128.066 13.0336V13.0267Z" fill="#F8FAFC"/>
+        </svg>
+    </div>
+
+    <div id="status">Loading AI Engine...</div>
+
+    <div class="main-stage">
+        
+        <div class="number-box">
+            <div id="step1" class="step active">1</div>
+            <div id="step2" class="step">2</div>
+            <div id="step3" class="step">3</div>
+        </div>
+
+        <div class="camera-box">
+            <span id="camPrompt">Initializing...</span>
+            <video id="webcam" autoplay playsinline></video>
+            <canvas id="outputCanvas" width="1920" height="1080"></canvas>
+        </div>
+
+        <div class="cta-container">
+            <button id="startCamBtn" class="btn-primary animate-reveal" disabled>Enable Camera</button>
+            <button id="captureBtn" class="btn-primary" style="display:none;">Snap & Generate</button>
+            <button id="downloadBtn" class="btn-primary" style="display:none;">Download</button>
+        </div>
+
+    </div>
+
+    <div class="bottom-text">
+        <div>Zoom Background Generator</div>
+        <div class="dim">Beta v1.0</div>
+        <div class="dim">Last updated: 04.02.26</div>
+    </div>
+
+    <script>
+        const startCamBtn = document.getElementById('startCamBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const webcam = document.getElementById('webcam');
+        const camPrompt = document.getElementById('camPrompt');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const ctx = outputCanvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const logoImg = document.getElementById('logoImg');
+        
+        // Step Indicators
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        const step3 = document.getElementById('step3');
+
+        let net;
+
+        // FIXED: Helper function now accepts an optional class name
+        function playRevealAnimation(element, animClass = 'animate-reveal') {
+            element.classList.remove(animClass);
+            void element.offsetWidth; // Trigger DOM reflow to restart animation
+            element.classList.add(animClass);
+        }
+
+        // 1. Load AI Model
+        async function loadModel() {
+            net = await bodyPix.load({ architecture: 'MobileNetV1', outputStride: 16, multiplier: 0.75, quantBytes: 2 });
+            statusText.innerText = "System Ready";
+            camPrompt.innerText = "Camera Off";
+            startCamBtn.disabled = false;
+        }
+
+        // Logic to shift UI to Step 1 (Reset)
+        function goToStep1() {
+            if (webcam.srcObject) {
+                webcam.srcObject.getTracks().forEach(track => track.stop());
+                webcam.srcObject = null;
+            }
+            
+            webcam.style.display = 'none';
+            outputCanvas.style.display = 'none';
+            camPrompt.style.display = 'block';
+            camPrompt.innerText = "Camera Off";
+            playRevealAnimation(camPrompt);
+
+            startCamBtn.style.display = 'flex';
+            playRevealAnimation(startCamBtn);
+
+            captureBtn.style.display = 'none';
+            downloadBtn.style.display = 'none';
+
+            step1.classList.add('active');
+            step2.classList.remove('active');
+            step3.classList.remove('active');
+
+            statusText.innerText = "System Ready";
+            statusText.style.color = "#C1C8CF";
+        }
+
+        // Logic to shift UI to Step 2 (Live Camera)
+        function goToStep2() {
+            if (!webcam.srcObject) {
+                startCamBtn.click();
+                return;
+            }
+            
+            webcam.style.display = 'block';
+            // FIXED: Uses the dedicated webcam animation to preserve the scaleX(-1) mirror effect
+            playRevealAnimation(webcam, 'animate-reveal-webcam');
+
+            outputCanvas.style.display = 'none';
+            camPrompt.style.display = 'none';
+            
+            startCamBtn.style.display = 'none';
+            
+            captureBtn.style.display = 'flex';
+            captureBtn.innerText = "Snap & Generate";
+            playRevealAnimation(captureBtn);
+
+            captureBtn.disabled = false;
+            downloadBtn.style.display = 'none';
+
+            step1.classList.remove('active');
+            step2.classList.add('active');
+            step3.classList.remove('active');
+
+            statusText.innerText = "Camera Active";
+            statusText.style.color = "#C1C8CF";
+        }
+
+        // 2. Start Camera Button Listener
+        startCamBtn.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                webcam.srcObject = stream;
+                
+                webcam.onloadedmetadata = () => {
+                    goToStep2();
+                };
+            } catch (err) {
+                console.error("Camera access denied.", err);
+                statusText.innerText = "Camera Blocked";
+                statusText.style.color = "#FF5643"; 
+                camPrompt.innerText = "Please allow camera access.";
+                playRevealAnimation(camPrompt);
+            }
+        });
+
+        // 3. Snap Photo & Auto-Generate
+        captureBtn.addEventListener('click', async () => {
+            statusText.innerText = "Analyzing...";
+            captureBtn.disabled = true;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = webcam.videoWidth;
+            tempCanvas.height = webcam.videoHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            tempCtx.drawImage(webcam, 0, 0, tempCanvas.width, tempCanvas.height);
+
+            const segmentation = await net.segmentPerson(tempCanvas);
+            const exactOutfitColor = extractShirtColor(tempCanvas, segmentation).hex();
+
+            drawFinalBackground(exactOutfitColor);
+
+            webcam.style.display = 'none';
+            
+            outputCanvas.style.display = 'block';
+            playRevealAnimation(outputCanvas);
+            
+            captureBtn.style.display = 'none';
+            
+            downloadBtn.style.display = 'flex';
+            playRevealAnimation(downloadBtn);
+
+            step1.classList.remove('active');
+            step2.classList.remove('active');
+            step3.classList.add('active');
+
+            statusText.innerText = `Color Matched: ${exactOutfitColor}`;
+            statusText.style.color = "#F0F55F"; 
+        });
+
+        // Event Listeners for Step Indicators (Back Buttons)
+        step1.addEventListener('click', () => {
+            if (!step1.classList.contains('active')) goToStep1();
+        });
+
+        step2.addEventListener('click', () => {
+            if (step3.classList.contains('active')) goToStep2();
+        });
+
+        function extractShirtColor(canvas, segmentation) {
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            let r = 0, g = 0, b = 0, count = 0;
+            
+            const startY = canvas.height * 0.6; 
+            const startX = canvas.width * 0.25;
+            const endX = canvas.width * 0.75;
+            
+            for (let i = 0; i < segmentation.data.length; i++) {
+                if (segmentation.data[i] === 1) {
+                    const x = i % canvas.width;
+                    const y = Math.floor(i / canvas.width);
+                    
+                    if (y >= startY && x >= startX && x <= endX) {
+                        const pixelIndex = i * 4;
+                        r += imageData[pixelIndex];
+                        g += imageData[pixelIndex + 1];
+                        b += imageData[pixelIndex + 2];
+                        count++;
+                    }
+                }
+            }
+            if (count === 0) return chroma('#808080'); 
+            
+            let finalColor = chroma([r / count, g / count, b / count]);
+
+            if (finalColor.hsl()[1] < 0.2) {
+                finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.15);
+            } else {
+                finalColor = finalColor.saturate(0.5);
+            }
+            
+            return finalColor;
+        }
+
+        function drawFinalBackground(bgColor) {
+            ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+            try {
+                if (!logoImg.complete || logoImg.naturalWidth === 0) return;
+
+                const fullWidth = outputCanvas.width;
+                const fullHeight = outputCanvas.height;
+
+                const logoCanvas = document.createElement('canvas');
+                logoCanvas.width = fullWidth;
+                logoCanvas.height = fullHeight;
+                const logoCtx = logoCanvas.getContext('2d');
+
+                logoCtx.drawImage(logoImg, 0, 0, fullWidth, fullHeight);
+
+                const isDarkBg = chroma(bgColor).luminance() < 0.5;
+                const baseLogoColor = isDarkBg ? '#FFFFFF' : '#000000';
+
+                logoCtx.globalCompositeOperation = 'source-in';
+                logoCtx.fillStyle = baseLogoColor;
+                logoCtx.fillRect(0, 0, fullWidth, fullHeight);
+                logoCtx.globalCompositeOperation = 'source-over';
+
+                ctx.globalAlpha = 0.4;
+                ctx.drawImage(logoCanvas, 0, 0);
+                ctx.globalAlpha = 1.0; 
+
+            } catch (err) {
+                console.warn("Could not draw logo.", err);
+            }
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'siriusxm-zoom-bg.jpg';
+            link.href = outputCanvas.toDataURL('image/jpeg', 0.9);
+            link.click();
+        });
+
+        loadModel();
+    </script>
+</body>
+</html>
