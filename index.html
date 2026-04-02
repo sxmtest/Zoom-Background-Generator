@@ -84,7 +84,26 @@
             line-height: 100%;
         }
         .bottom-text .dim {
-            opacity: 0.4;
+            color: #8C9196;
+        }
+
+        .bottom-text-right{
+                        position: absolute;
+            bottom: 40px;
+            left: 40px;
+            display: flex;
+            width: 181px;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            color: #F8FAFC;
+            font-family: "Roboto Mono", monospace;
+            font-size: 10px;
+            font-weight: 400;
+            line-height: 100%;
+        }
+             .bottom-text-right .dim {
+            color: #8C9196;
         }
 
         /* Center Content Wrapper */
@@ -280,6 +299,9 @@
         <div class="dim">Beta v1.0</div>
         <div class="dim">Last updated: 04.02.26</div>
     </div>
+        <div class="bottom-text-right">
+        <div class="dim">Last updated: 04.02.26</div>
+    </div>
 
     <script>
         const startCamBtn = document.getElementById('startCamBtn');
@@ -337,7 +359,7 @@
             step3.classList.remove('active');
 
             statusText.innerText = "System Ready";
-            statusText.style.color = "#C1C8CF";
+            statusText.style.color = "#8C9196";
         }
 
         function goToStep2() {
@@ -369,7 +391,7 @@
             step3.classList.remove('active');
 
             statusText.innerText = "Camera Active";
-            statusText.style.color = "#C1C8CF";
+            statusText.style.color = "#8C9196";
         }
 
         startCamBtn.addEventListener('click', async () => {
