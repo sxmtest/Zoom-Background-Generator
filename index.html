@@ -435,15 +435,16 @@
 function extractShirtColor(canvas, segmentation) {
             const ctx = canvas.getContext('2d');
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-            let r = 0, g = 0, b = 0, count = 0;
             
-            // THE "OVERALL OUTFIT" BOX
-            // Y: 60% to 100% (Captures the entire lower torso and chest)
-            // X: 20% to 80% (Wide enough to catch the outer shirt shoulders and inner shirt)
-            const startY = canvas.height * 0.60; 
-            const endY = canvas.height * 1.0; 
-            const startX = canvas.width * 0.20;
-            const endX = canvas.width * 0.80;
+            // THE "TRUE OUTFIT" BOX
+            const startY = canvas.height * 0.65; 
+            const endY = canvas.height * 1.00; 
+            const startX = canvas.width * 0.30;
+            const endX = canvas.width * 0.70;
+            
+            const colorCounts = {};
+            let maxCount = 0;
+            let dominantRGB = null; 
             
             for (let i = 0; i < segmentation.data.length; i++) {
                 if (segmentation.data[i] === 1) { 
@@ -452,41 +453,54 @@ function extractShirtColor(canvas, segmentation) {
                     
                     if (y >= startY && y <= endY && x >= startX && x <= endX) {
                         const pixelIndex = i * 4;
-                        r += imageData[pixelIndex];
-                        g += imageData[pixelIndex + 1];
-                        b += imageData[pixelIndex + 2];
-                        count++;
+                        const r = imageData[pixelIndex];
+                        const g = imageData[pixelIndex + 1];
+                        const b = imageData[pixelIndex + 2];
+                        
+                        // Group into larger buckets (size 32 instead of 15)
+                        // This forces noisy, scattered webcam pixels to group into solid, true colors.
+                        const bucketR = Math.round(r / 16) * 16;
+                        const bucketG = Math.round(g / 16) * 16;
+                        const bucketB = Math.round(b / 16) * 16;
+                        
+                        const key = `${bucketR},${bucketG},${bucketB}`;
+                        colorCounts[key] = (colorCounts[key] || 0) + 1;
+                        
+                        if (colorCounts[key] > maxCount) {
+                            maxCount = colorCounts[key];
+                            dominantRGB = [bucketR, bucketG, bucketB];
+                        }
                     }
                 }
             }
             
-            if (count === 0) return chroma('#808080'); 
+            // Fallback just in case
+            if (!dominantRGB) return chroma('#808080'); 
             
-            // 1. Get the pure, raw average color of the ENTIRE outfit
-            let finalColor = chroma([r / count, g / count, b / count]);
+            // 1. Get the pure Dominant Color
+            let finalColor = chroma(dominantRGB);
             let [h, s, l] = finalColor.hsl();
+            if (isNaN(h)) h = 0;
             
-            if (isNaN(h)) h = 0; 
-
-            // 2. TRUE AUTO-WHITE BALANCE
-            if (s < 0.25) {
-                // If it's a neutral/dark outfit (like black plaid), the webcam will tint it warm brown.
-                // We strip out that yellow webcam noise so it reads as a clean, cool neutral.
-                finalColor = finalColor.desaturate(0.5);
+            // 2. TRUE WHITE BALANCE (Fixing the "Brown/Mud" issue)
+            if (s < 0.20) {
+                // If the dominant color is a neutral grey/black/white, webcams make it look brown/yellow.
+                // We actively desaturate it so it stays a crisp, clean neutral.
+                finalColor = finalColor.desaturate(0.2);
             } else {
-                // If it's a genuinely colorful outfit, bump it up so it pops on screen!
-                finalColor = finalColor.saturate(0.4);
+                // If it's a deliberately colorful shirt, give it a gentle camera pop
+                finalColor = finalColor.saturate(0.2);
             }
             
-            // 3. Fix crushed webcam shadows
-            if (finalColor.luminance() < 0.08) {
-                finalColor = finalColor.brighten(0.6);
-            } else if (finalColor.luminance() < 0.20) {
-                finalColor = finalColor.brighten(0.3);
+            // 3. FIX CRUSHED WEBCAM BLACKS
+            // Lift pitch-black shadows just enough so they don't look like a void
+            if (finalColor.luminance() < 0.02) {
+                finalColor = finalColor.brighten(0.1);
             }
             
             return finalColor;
         }
+
         function drawFinalBackground(bgColor) {
             ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
             ctx.fillStyle = bgColor;
