@@ -452,73 +452,68 @@
         });
 
 function extractShirtColor(canvas, segmentation) {
-            const ctx = canvas.getContext('2d');
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    
+    // YOUR REQUESTED BOX: Bottom 30% of feed, 60% Width
+    const startY = canvas.height * 0.70; 
+    const endY = canvas.height * 1.00; 
+    const startX = canvas.width * 0.20;
+    const endX = canvas.width * 0.80;
+    
+    const colorCounts = {};
+    let maxCount = 0;
+    let dominantRGB = null; 
+    
+    for (let i = 0; i < segmentation.data.length; i++) {
+        if (segmentation.data[i] === 1) { 
+            const x = i % canvas.width;
+            const y = Math.floor(i / canvas.width);
             
-            // THE "TRUE OUTFIT" BOX
-            const startY = canvas.height * 0.65; 
-            const endY = canvas.height * 1.00; 
-            const startX = canvas.width * 0.30;
-            const endX = canvas.width * 0.70;
-            
-            const colorCounts = {};
-            let maxCount = 0;
-            let dominantRGB = null; 
-            
-            for (let i = 0; i < segmentation.data.length; i++) {
-                if (segmentation.data[i] === 1) { 
-                    const x = i % canvas.width;
-                    const y = Math.floor(i / canvas.width);
-                    
-                    if (y >= startY && y <= endY && x >= startX && x <= endX) {
-                        const pixelIndex = i * 4;
-                        const r = imageData[pixelIndex];
-                        const g = imageData[pixelIndex + 1];
-                        const b = imageData[pixelIndex + 2];
-                        
-                        // Group into larger buckets (size 32 instead of 15)
-                        // This forces noisy, scattered webcam pixels to group into solid, true colors.
-                        const bucketR = Math.round(r / 16) * 16;
-                        const bucketG = Math.round(g / 16) * 16;
-                        const bucketB = Math.round(b / 16) * 16;
-                        
-                        const key = `${bucketR},${bucketG},${bucketB}`;
-                        colorCounts[key] = (colorCounts[key] || 0) + 1;
-                        
-                        if (colorCounts[key] > maxCount) {
-                            maxCount = colorCounts[key];
-                            dominantRGB = [bucketR, bucketG, bucketB];
-                        }
-                    }
+            if (y >= startY && y <= endY && x >= startX && x <= endX) {
+                const pixelIndex = i * 4;
+                const r = imageData[pixelIndex];
+                const g = imageData[pixelIndex + 1];
+                const b = imageData[pixelIndex + 2];
+                
+                const bucketR = Math.round(r / 16) * 16;
+                const bucketG = Math.round(g / 16) * 16;
+                const bucketB = Math.round(b / 16) * 16;
+                
+                const key = `${bucketR},${bucketG},${bucketB}`;
+                colorCounts[key] = (colorCounts[key] || 0) + 1;
+                
+                if (colorCounts[key] > maxCount) {
+                    maxCount = colorCounts[key];
+                    dominantRGB = [bucketR, bucketG, bucketB];
                 }
             }
-            
-            // Fallback just in case
-            if (!dominantRGB) return chroma('#808080'); 
-            
-            // 1. Get the pure Dominant Color
-            let finalColor = chroma(dominantRGB);
-            let [h, s, l] = finalColor.hsl();
-            if (isNaN(h)) h = 0;
-            
-            // 2. TRUE WHITE BALANCE (Fixing the "Brown/Mud" issue)
-            if (s < 0.20) {
-                // If the dominant color is a neutral grey/black/white, webcams make it look brown/yellow.
-                // We actively desaturate it so it stays a crisp, clean neutral.
-                finalColor = finalColor.desaturate(0.2);
-            } else {
-                // If it's a deliberately colorful shirt, give it a gentle camera pop
-                finalColor = finalColor.saturate(0.2);
-            }
-            
-            // 3. FIX CRUSHED WEBCAM BLACKS
-            // Lift pitch-black shadows just enough so they don't look like a void
-            if (finalColor.luminance() < 0.02) {
-                finalColor = finalColor.brighten(0.1);
-            }
-            
-            return finalColor;
         }
+    }
+    
+    if (!dominantRGB) return chroma('#808080'); 
+    
+    // 1. Capture the raw color
+    let finalColor = chroma(dominantRGB);
+    
+    // 2. SUBTLE COOLING FILTER
+    // Reduced to 5%. This provides a professional white-balance fix 
+    // that won't turn your warm beige jacket into a blue-grey mess.
+    finalColor = chroma.mix(finalColor, '#97B0D3', 0.05, 'rgb');
+    
+    // 3. TRANSPARENT SATURATION
+    // No more hue overrides! We just boost the natural vibrance by a 
+    // tiny amount to counteract the webcam's dullness.
+    finalColor = finalColor.saturate(0.25);
+    
+    // 4. GENTLE LUMINANCE LIFT
+    // If the sensor is underexposed, we lift it slightly so it doesn't look muddy.
+    if (finalColor.luminance() < 0.15) {
+        finalColor = finalColor.brighten(0.2);
+    }
+    
+    return finalColor;
+}
 
         function drawFinalBackground(bgColor) {
             ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
