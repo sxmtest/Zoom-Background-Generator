@@ -39,7 +39,6 @@
             animation: smoothReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        /* Dedicated animation for the webcam to preserve the mirror flip */
         @keyframes webcamReveal {
             0% { opacity: 0; transform: scaleX(-1) translateY(8px); }
             100% { opacity: 1; transform: scaleX(-1) translateY(0); }
@@ -88,7 +87,7 @@
             opacity: 0.4;
         }
 
-        /* Center Content Wrapper - gap 32px handles all the spacing perfectly now */
+        /* Center Content Wrapper */
         .main-stage {
             display: flex;
             flex-direction: column;
@@ -162,6 +161,26 @@
             display: none; 
         }
 
+        /* The SVG Target Guide Container */
+        .target-guide {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            margin: 0 auto;
+            width: 460px;
+            height: 340px; 
+            display: none; 
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .target-guide svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
         #outputCanvas { 
             width: 100%; 
             height: 100%; 
@@ -169,7 +188,7 @@
             display: none; 
         }
 
-        /* CTA Containers - FIXED: Removed min-height so it wraps tightly */
+        /* CTA Containers */
         .cta-container {
             display: inline-flex;
             align-items: center;
@@ -253,6 +272,17 @@
         <div class="camera-box">
             <span id="camPrompt">Initializing...</span>
             <video id="webcam" autoplay playsinline></video>
+            
+            <div id="targetGuide" class="target-guide">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 462 332" fill="none">
+                    <path d="M230.926 0C286.707 0 331.926 45.2192 331.926 101C331.926 130.965 318.875 157.881 298.149 176.378C374.893 198.326 436.169 256.909 461.852 332H0C25.682 256.91 86.9582 198.326 163.701 176.378C142.976 157.881 129.926 130.965 129.926 101C129.926 45.2192 175.145 0 230.926 0Z" 
+                          fill="rgba(248, 250, 252, 0.15)" 
+                          stroke="rgba(248, 250, 252, 0.4)" 
+                          stroke-width="3" 
+                          stroke-dasharray="10 10"/>
+                </svg>
+            </div>
+
             <canvas id="outputCanvas" width="1920" height="1080"></canvas>
         </div>
 
@@ -277,6 +307,7 @@
         const webcam = document.getElementById('webcam');
         const camPrompt = document.getElementById('camPrompt');
         const outputCanvas = document.getElementById('outputCanvas');
+        const targetGuide = document.getElementById('targetGuide');
         const ctx = outputCanvas.getContext('2d');
         const statusText = document.getElementById('status');
         const logoImg = document.getElementById('logoImg');
@@ -309,6 +340,7 @@
             
             webcam.style.display = 'none';
             outputCanvas.style.display = 'none';
+            targetGuide.style.display = 'none'; 
             camPrompt.style.display = 'block';
             camPrompt.innerText = "Camera Off";
             playRevealAnimation(camPrompt);
@@ -335,6 +367,9 @@
             
             webcam.style.display = 'block';
             playRevealAnimation(webcam, 'animate-reveal-webcam');
+
+            targetGuide.style.display = 'block'; 
+            playRevealAnimation(targetGuide);
 
             outputCanvas.style.display = 'none';
             camPrompt.style.display = 'none';
@@ -390,6 +425,7 @@
             drawFinalBackground(exactOutfitColor);
 
             webcam.style.display = 'none';
+            targetGuide.style.display = 'none'; 
             
             outputCanvas.style.display = 'block';
             playRevealAnimation(outputCanvas);
@@ -420,7 +456,9 @@
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            const startY = canvas.height * 0.6; 
+            // STRICT SNIPER BOX - Mathematically scaled up to cover the wider 420px chest area
+            const startY = canvas.height * 0.55; 
+            const endY = canvas.height * 1.0; 
             const startX = canvas.width * 0.25;
             const endX = canvas.width * 0.75;
             
@@ -429,7 +467,7 @@
                     const x = i % canvas.width;
                     const y = Math.floor(i / canvas.width);
                     
-                    if (y >= startY && x >= startX && x <= endX) {
+                    if (y >= startY && y <= endY && x >= startX && x <= endX) {
                         const pixelIndex = i * 4;
                         r += imageData[pixelIndex];
                         g += imageData[pixelIndex + 1];
@@ -441,11 +479,18 @@
             if (count === 0) return chroma('#808080'); 
             
             let finalColor = chroma([r / count, g / count, b / count]);
+            let [h, s, l] = finalColor.hsl();
+            
+            if (isNaN(h)) h = 0; 
 
-            if (finalColor.hsl()[1] < 0.2) {
+            if (s < 0.18 && h > 10 && h < 60) {
                 finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.15);
-            } else {
-                finalColor = finalColor.saturate(0.5);
+            } 
+            else {
+                finalColor = finalColor.saturate(0.8);
+                if (finalColor.luminance() < 0.04) {
+                    finalColor = finalColor.brighten(0.4);
+                }
             }
             
             return finalColor;
