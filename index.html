@@ -451,19 +451,19 @@
             if (step3.classList.contains('active')) goToStep2();
         });
 
- function extractShirtColor(canvas, segmentation) {
+function extractShirtColor(canvas, segmentation) {
             const ctx = canvas.getContext('2d');
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // STRICT SNIPER BOX - Reverted strictly to the bottom 25% to completely avoid skin tones
+            // STRICT SNIPER BOX - Dead center of the lower chest, completely avoiding the neck
             const startY = canvas.height * 0.75; 
             const endY = canvas.height * 0.95; 
-            const startX = canvas.width * 0.35;
-            const endX = canvas.width * 0.65;
+            const startX = canvas.width * 0.40;
+            const endX = canvas.width * 0.60;
             
             for (let i = 0; i < segmentation.data.length; i++) {
-                if (segmentation.data[i] === 1) {
+                if (segmentation.data[i] === 1) { // 1 means it's a person
                     const x = i % canvas.width;
                     const y = Math.floor(i / canvas.width);
                     
@@ -476,34 +476,17 @@
                     }
                 }
             }
+            
+            // Fallback if the AI somehow totally misses the person
             if (count === 0) return chroma('#808080'); 
             
+            // 1. Get the pure, raw average color from the camera
             let finalColor = chroma([r / count, g / count, b / count]);
-            let [h, s, l] = finalColor.hsl();
             
-            if (isNaN(h)) h = 0; 
-
-            // SMART MATH: Kept the noise-canceling logic so your dark plaid doesn't turn green!
-            if (s < 0.20) {
-                // If it's a low-saturation color picking up warm room lighting, cool it down
-                if (h > 10 && h < 60) {
-                    finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.10);
-                } else {
-                    // Otherwise, explicitly strip out webcam color noise (like fake green tints)
-                    finalColor = finalColor.set('hsl.s', 0.10);
-                }
-            } 
-            else {
-                // It's an intentionally colorful shirt (Forest Green, Red, etc)
-                finalColor = finalColor.saturate(0.5); 
-                if (finalColor.luminance() < 0.04) {
-                    finalColor = finalColor.brighten(0.4);
-                }
-            }
-            
-            return finalColor;
+            // 2. Add a tiny, generic saturation bump so it looks nice as a background, 
+            // but NEVER force or change the actual hue. Just let it be what it is!
+            return finalColor.saturate(0.2);
         }
-
         function drawFinalBackground(bgColor) {
             ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
             ctx.fillStyle = bgColor;
