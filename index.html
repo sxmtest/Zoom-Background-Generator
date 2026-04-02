@@ -437,16 +437,16 @@ function extractShirtColor(canvas, segmentation) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             let r = 0, g = 0, b = 0, count = 0;
             
-            // STRICT TIGHT SNIPER BOX
-            // Y: 70% to 95% (Safely below the chin)
-            // X: 40% to 60% (Narrow column directly in the center to hit your inner shirt)
-            const startY = canvas.height * 0.70; 
-            const endY = canvas.height * 0.95; 
-            const startX = canvas.width * 0.40;
-            const endX = canvas.width * 0.60;
+            // THE MICRO-SNIPER BOX
+            // Y: 55% to 80% (True mid-chest, safely below the chin)
+            // X: 45% to 55% (A razor-thin 10% vertical column dead center for your open shirt)
+            const startY = canvas.height * 0.55; 
+            const endY = canvas.height * 0.80; 
+            const startX = canvas.width * 0.45;
+            const endX = canvas.width * 0.55;
             
             for (let i = 0; i < segmentation.data.length; i++) {
-                if (segmentation.data[i] === 1) { // 1 means it's a person
+                if (segmentation.data[i] === 1) { 
                     const x = i % canvas.width;
                     const y = Math.floor(i / canvas.width);
                     
@@ -460,7 +460,6 @@ function extractShirtColor(canvas, segmentation) {
                 }
             }
             
-            // Fallback if the AI somehow totally misses the person
             if (count === 0) return chroma('#808080'); 
             
             let finalColor = chroma([r / count, g / count, b / count]);
@@ -468,20 +467,15 @@ function extractShirtColor(canvas, segmentation) {
             
             if (isNaN(h)) h = 0; 
 
-            // RESTORED SMART MATH: Fixes muddy browns and neutralizes webcam noise
-            if (s < 0.20) {
-                // If it's picking up warm room light (brown/yellow/orange), force it cool
-                if (h > 10 && h < 60) {
-                    finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.15);
-                } else {
-                    // Otherwise, explicitly strip out webcam color noise
-                    finalColor = finalColor.set('hsl.s', 0.15);
-                }
+            // THE FIX: If the camera sees ANY low-saturation muddy color (like your reddish-brown),
+            // we ruthlessly override it and force it to be a clean, cool blue-grey.
+            if (s < 0.25) {
+                finalColor = finalColor.set('hsl.h', 210).set('hsl.s', 0.15);
             } 
             else {
-                // It's an intentionally colorful shirt
-                finalColor = finalColor.saturate(0.5); 
-                if (finalColor.luminance() < 0.04) {
+                // It's an intentionally colorful shirt (like Forest Green)
+                finalColor = finalColor.saturate(0.4); 
+                if (finalColor.luminance() < 0.05) {
                     finalColor = finalColor.brighten(0.4);
                 }
             }
