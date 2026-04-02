@@ -62,7 +62,7 @@
             right: 40px;
             color: #C1C8CF;
             font-family: "Roboto Mono", monospace;
-            font-size: 10px; /* Reduced to 10px */
+            font-size: 10px;
             font-weight: 400;
             line-height: 140%;
             transition: color 0.3s ease;
@@ -80,7 +80,7 @@
             gap: 6px;
             color: #F8FAFC;
             font-family: "Roboto Mono", monospace;
-            font-size: 10px; /* Reduced to 10px */
+            font-size: 10px;
             font-weight: 400;
             line-height: 100%;
         }
@@ -88,7 +88,7 @@
             opacity: 0.4;
         }
 
-        /* Center Content Wrapper */
+        /* Center Content Wrapper - gap 32px handles all the spacing perfectly now */
         .main-stage {
             display: flex;
             flex-direction: column;
@@ -96,7 +96,7 @@
             gap: 32px;
         }
 
-        /* Step Indicator Container - Tighter padding to hug the boxes */
+        /* Step Indicator Container */
         .number-box {
             display: inline-flex;
             padding: 8px 10px; 
@@ -169,12 +169,11 @@
             display: none; 
         }
 
-        /* CTA Containers */
+        /* CTA Containers - FIXED: Removed min-height so it wraps tightly */
         .cta-container {
             display: inline-flex;
             align-items: center;
             gap: 16px;
-            min-height: 60px;
         }
 
         /* BASE BUTTON */
@@ -183,7 +182,7 @@
             font-size: 14px; 
             font-weight: 500;
             font-family: "Geist", inherit;
-            line-height: 1; /* Forces the text to center optically */
+            line-height: 1; 
             transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease, transform 0.1s ease;
             will-change: background-color, color;
         }
@@ -368,7 +367,7 @@
             } catch (err) {
                 console.error("Camera access denied.", err);
                 statusText.innerText = "Camera Blocked";
-                statusText.style.color = "#EF4444"; 
+                statusText.style.color = "#FF5643"; 
                 camPrompt.innerText = "Please allow camera access.";
                 playRevealAnimation(camPrompt);
             }
@@ -405,7 +404,7 @@
             step3.classList.add('active');
 
             statusText.innerText = `Color Matched: ${exactOutfitColor}`;
-            statusText.style.color = "#10B981"; 
+            statusText.style.color = "#F0F55F"; 
         });
 
         step1.addEventListener('click', () => {
